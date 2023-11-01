@@ -28,11 +28,9 @@ impl Parser {
         while self.current < self.lex_items.len() {
             match &self.lex_items[self.current] {
                 LexItem::NewLine => {
-                    if self.is_prev_newline() {
+                    if self.is_prev_a(LexItem::NewLine) {
                         break;
                     }
-                    result.push(word);
-                    word = String::from("");
                 }
                 LexItem::Space => {
                     if word.len() != 0 {
@@ -43,8 +41,12 @@ impl Parser {
                     word.push('#');
                 }
                 LexItem::Dash => {
-                    if word.len() != 0 || !self.is_prev_newline() {
+                    // this will not parse dash in text correctly... ("hello - world")
+                    if word.len() != 0 && !self.is_prev_a(LexItem::NewLine) && !self.is_prev_a(LexItem::Space)  {
                         word.push('-');
+                    } else if word.len() != 0 {
+                        result.push(word);
+                        word = String::from("");
                     }
                 }
                 LexItem::Char(x) => {
@@ -104,12 +106,12 @@ impl Parser {
             }
         }
     }
-    fn parse_text(&mut self) -> String {
+    fn parse_paragraph(&mut self) -> String {
         let mut result = String::from("");
         while self.current < self.lex_items.len() {
             match &self.lex_items[self.current] {
                 LexItem::NewLine => {
-                    if self.is_prev_newline() {
+                    if self.is_prev_a(LexItem::NewLine) {
                         break;
                     }
                     result.push('\n');
@@ -118,13 +120,15 @@ impl Parser {
                     result.push(' ');
                 }
                 LexItem::Hash => {
-                    if self.is_prev_newline() {
+                    if self.is_prev_a(LexItem::NewLine) {
+                        self.current = self.current - 1;
                         break;
                     }
                     result.push('#');
                 }
                 LexItem::Dash => {
-                    if self.is_prev_newline() {
+                    if self.is_prev_a(LexItem::NewLine) {
+                        self.current = self.current - 1;
                         break;
                     }
                     result.push('-');
@@ -138,8 +142,8 @@ impl Parser {
         return result;
     }
 
-    fn is_prev_newline(&self) -> bool {
-        return self.lex_items[self.current - 1] == LexItem::NewLine;
+    fn is_prev_a(&self, compare: LexItem) -> bool {
+        return self.lex_items[self.current - 1] == compare;
     }
 
     pub fn parse(&mut self) {
@@ -154,8 +158,11 @@ impl Parser {
                     let list = self.parse_list();
                     self.tokens.push(Token::List(list));
                 }
+                LexItem::Space => {
+                    // ignore leading space
+                }
                 _ => {
-                    let text = self.parse_text();
+                    let text = self.parse_paragraph();
 
                     self.tokens.push(Token::Text(text));
                 }
